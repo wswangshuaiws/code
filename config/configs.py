@@ -18,7 +18,8 @@ DATA_PATH = os.path.join(DATA_DIR, "dataset.txt")
 OUTPUT_DIR = os.path.join(ROOT_DIR, "output")
 DATASET_PATH = os.path.join(OUTPUT_DIR, "dataset.npz")
 MODEL_MLP_PATH = os.path.join(OUTPUT_DIR, "model_MLP_%d.pkl")
-MODEL_GAN_PATH = os.path.join(OUTPUT_DIR, "model_GAN_%d.pkl")
+MODEL_GAN_GEN_PATH = os.path.join(OUTPUT_DIR, "model_GAN_GEN_%d.pkl")
+MODEL_GAN_DISC_PATH = os.path.join(OUTPUT_DIR, "model_GAN_DISC_%d.pkl")
 SCORE_MLP_PATH = os.path.join(OUTPUT_DIR, "score_MLP.npy")
 SCORE_GAN_PATH = os.path.join(OUTPUT_DIR, "score_GAN.npy")
 makedir(OUTPUT_DIR)
@@ -31,5 +32,6 @@ CONFIG = {
     "batch_size": 5,
     "lr": 0.0005,
     "epoch": 100,
-    "dropout_rate": 0.2
+    "dropout_rate": 0.2,
+    "GAN_train_num": 2
 }

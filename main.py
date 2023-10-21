@@ -2,7 +2,8 @@ import torch
 import numpy as np
 from torch import nn
 
-from config.configs import DATA_PATH, DATASET_PATH, CONFIG, DEVICE, MODEL_MLP_PATH, SCORE_MLP_PATH
+from config.configs import DATA_PATH, DATASET_PATH, CONFIG, DEVICE, MODEL_MLP_PATH, SCORE_MLP_PATH, MODEL_GAN_GEN_PATH, \
+    MODEL_GAN_DISC_PATH, SCORE_GAN_PATH
 from model.Model_GAN import Model_GAN_GEN, Model_GAN_DISC
 from model.Model_MLP import Model_MLP
 
@@ -59,7 +60,67 @@ def run_train_Model_MLP():
 
 
 def run_train_Model_GAN():
-    pass
+    train_index = np.load(DATASET_PATH)['train_set']
+    train_index = torch.FloatTensor(train_index)
+
+    for fold in range(5):  # 开始五倍交叉验证
+        # 定义生成器和鉴别器
+        generator = Model_GAN_GEN(dropout_rate=CONFIG["dropout_rate"]).to(DEVICE)
+        discriminator = Model_GAN_DISC(dropout_rate=CONFIG["dropout_rate"]).to(DEVICE)
+
+        # 定义优化器
+        optimizer_g = torch.optim.Adam(generator.parameters(), lr=CONFIG["lr"])
+        optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=CONFIG["lr"])
+
+        # 定义损失函数
+        criterion = nn.BCELoss()
+
+        for k in range(CONFIG["GAN_train_num"]):
+            # 训练鉴别器
+            # 生成数据集
+            train_dataset = DataLoader(Datasets(train_index[fold]), CONFIG["batch_size"], shuffle=True)
+
+            generator.eval()
+            discriminator.train()
+            for epoch in range(CONFIG["epoch"]):
+                train_loss_records = []
+                for step, (x, y) in enumerate(train_dataset):
+                    fake_data = generator(x)
+                    output_fake = discriminator(fake_data.detach())
+                    output_real = discriminator(y)
+                    real_labels = torch.zeros((x.shape[0], 1))
+                    fake_labels = torch.zeros((x.shape[0], 1))
+                    loss_real = criterion(output_real, real_labels)
+                    loss_fake = criterion(output_fake, fake_labels)
+                    loss_d = loss_real + loss_fake
+                    optimizer_d.zero_grad()
+                    loss_d.backward()
+                    optimizer_d.step()
+                    train_loss_records.append(loss_d.item())
+                train_loss = round(sum(train_loss_records) / len(train_loss_records), 4)
+                print(f"[train]   Fold: {fold + 1} / {5}, Epoch: {epoch + 1} / epoch, Loss: {train_loss}")
+
+            # 训练生成器
+            # 生成训练集
+            train_dataset = DataLoader(Datasets(train_index[fold]), CONFIG["batch_size"], shuffle=True)
+            generator.train()  # 开始训练
+            discriminator.eval()
+            for epoch in range(CONFIG["epoch"]):
+                train_loss_records = []
+                for step, (x, _) in enumerate(train_dataset):
+                    fake_data = generator(x)
+                    output_fake = discriminator(fake_data)
+                    real_label = torch.ones((x.shape[0], 1))
+                    loss_g = criterion(output_fake, real_label)
+                    optimizer_g.zero_grad()
+                    loss_g.backward()
+                    optimizer_g.step()
+                    train_loss_records.append(loss_g.item())
+                train_loss = round(sum(train_loss_records) / len(train_loss_records), 4)
+                print(f"[train]   Fold: {fold + 1} / {5}, Epoch: {epoch + 1} / epoch, Loss: {train_loss}")
+
+        torch.save(generator.state_dict(), MODEL_GAN_GEN_PATH % fold)
+        torch.save(discriminator.state_dict(), MODEL_GAN_DISC_PATH % fold)
 
 
 def run_test_Model_MLP():
@@ -87,7 +148,27 @@ def run_test_Model_MLP():
 
 
 def run_test_Model_GAN():
-    pass
+    test_index = np.load(DATASET_PATH)['train_set']
+    test_index = torch.FloatTensor(test_index)
+
+    matrices = []
+    for fold in range(5):  # 五倍交叉验证
+        test_dataset = DataLoader(Datasets(test_index[fold]), CONFIG["batch_size"], shuffle=False)
+
+        # 从文件加载模型
+        net = Model_GAN_GEN(dropout_rate=CONFIG["dropout_rate"]).to(DEVICE)
+        net.load_state_dict(torch.load(MODEL_GAN_GEN_PATH % fold, map_location=torch.device("cpu")))
+
+        net.eval()  # 开始测试
+        tmp = []
+        for step, (x, _) in enumerate(test_dataset):
+            with torch.no_grad():
+                scores = net(x).numpy()
+            tmp.extend(scores)
+        matrices.append(tmp)
+
+    # 存储得分矩阵
+    np.save(SCORE_GAN_PATH, np.array(matrices))
 
 
 if __name__ == '__main__':
