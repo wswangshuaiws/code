@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from torch import nn
+from torch.autograd import Variable
 
 from config.configs import DATA_PATH, DATASET_PATH, CONFIG, DEVICE, MODEL_MLP_PATH, SCORE_MLP_PATH, MODEL_GAN_GEN_PATH, \
     MODEL_GAN_DISC_PATH, SCORE_GAN_PATH
@@ -73,51 +74,54 @@ def run_train_Model_GAN():
         optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=CONFIG["lr"])
 
         # 定义损失函数
-        criterion = nn.BCELoss()
+        criterion_1 = nn.CrossEntropyLoss()
+        criterion_2 = nn.MSELoss()
 
         for k in range(CONFIG["GAN_train_num"]):
             # 训练鉴别器
-            # 生成数据集
             train_dataset = DataLoader(Datasets(train_index[fold]), CONFIG["batch_size"], shuffle=True)
-
             generator.eval()
             discriminator.train()
             for epoch in range(CONFIG["epoch"]):
                 train_loss_records = []
-                for step, (x, y) in enumerate(train_dataset):
+                for step, (x, label) in enumerate(train_dataset):
                     fake_data = generator(x)
                     output_fake = discriminator(fake_data.detach())
-                    output_real = discriminator(y)
-                    real_labels = torch.zeros((x.shape[0], 1))
-                    fake_labels = torch.zeros((x.shape[0], 1))
-                    loss_real = criterion(output_real, real_labels)
-                    loss_fake = criterion(output_fake, fake_labels)
+                    output_real = discriminator(label)
+                    real_labels = Variable(torch.ones(x.shape[0])).long()
+                    fake_labels = Variable(torch.zeros(x.shape[0])).long()
+
+                    loss_real = criterion_1(output_real, real_labels)
+                    loss_fake = criterion_1(output_fake, fake_labels)
                     loss_d = loss_real + loss_fake
+
                     optimizer_d.zero_grad()
                     loss_d.backward()
                     optimizer_d.step()
                     train_loss_records.append(loss_d.item())
                 train_loss = round(sum(train_loss_records) / len(train_loss_records), 4)
-                print(f"[train]   Fold: {fold + 1} / {5}, Epoch: {epoch + 1} / epoch, Loss: {train_loss}")
+                print(f"[train-disc]   Fold: {fold + 1} / {5}, Epoch: {epoch + 1} / epoch, Loss: {train_loss}")
 
             # 训练生成器
-            # 生成训练集
             train_dataset = DataLoader(Datasets(train_index[fold]), CONFIG["batch_size"], shuffle=True)
             generator.train()  # 开始训练
             discriminator.eval()
             for epoch in range(CONFIG["epoch"]):
                 train_loss_records = []
-                for step, (x, _) in enumerate(train_dataset):
+                for step, (x, label) in enumerate(train_dataset):
                     fake_data = generator(x)
                     output_fake = discriminator(fake_data)
-                    real_label = torch.ones((x.shape[0], 1))
-                    loss_g = criterion(output_fake, real_label)
+                    real_labels = Variable(torch.ones(x.shape[0])).long()
+                    label = Variable(label).long()
+
+                    loss_g = criterion_1(output_fake, real_labels) + criterion_2(fake_data, label)
+
                     optimizer_g.zero_grad()
                     loss_g.backward()
                     optimizer_g.step()
                     train_loss_records.append(loss_g.item())
                 train_loss = round(sum(train_loss_records) / len(train_loss_records), 4)
-                print(f"[train]   Fold: {fold + 1} / {5}, Epoch: {epoch + 1} / epoch, Loss: {train_loss}")
+                print(f"[train-gen]   Fold: {fold + 1} / {5}, Epoch: {epoch + 1} / epoch, Loss: {train_loss}")
 
         torch.save(generator.state_dict(), MODEL_GAN_GEN_PATH % fold)
         torch.save(discriminator.state_dict(), MODEL_GAN_DISC_PATH % fold)
@@ -172,8 +176,8 @@ def run_test_Model_GAN():
 
 
 if __name__ == '__main__':
-    # split_train_test_set()
-    # run_train_Model_MLP()
-    # run_test_Model_MLP()
+    split_train_test_set()
+    run_train_Model_MLP()
+    run_test_Model_MLP()
     run_train_Model_GAN()
     run_test_Model_GAN()

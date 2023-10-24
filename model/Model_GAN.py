@@ -8,9 +8,11 @@ class Model_GAN_GEN(nn.Module):
         super(Model_GAN_GEN, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Linear(3, 64),
-            nn.ReLU(),
-            nn.Linear(64, 3),
+            nn.Linear(3, 16),
+            nn.Dropout(dropout_rate),
+            nn.Linear(16, 6),
+            nn.Dropout(dropout_rate),
+            nn.Linear(6, 3),
         )
 
     def forward(self, x):
@@ -23,9 +25,9 @@ class Model_GAN_DISC(nn.Module):
 
         self.model = nn.Sequential(
             nn.Linear(3, 64),
+            nn.Dropout(dropout_rate),
             nn.ReLU(),
-            nn.Linear(64, 1),
-            nn.Sigmoid()
+            nn.Linear(64, 2),
         )
 
     def forward(self, x):

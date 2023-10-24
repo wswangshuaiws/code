@@ -30,8 +30,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # model configs
 CONFIG = {
     "batch_size": 5,
-    "lr": 0.0005,
-    "epoch": 100,
+    "lr": 0.005,
+    "epoch": 2000,
     "dropout_rate": 0.2,
     "GAN_train_num": 2
 }
